@@ -69,18 +69,18 @@ export default function usePanzoom(canvasWrapperRef: Ref<HTMLElement | undefined
     
   }
 
-  const normalizeMatrixCoordinates = (clientX: number, clientY: number, innerFrame = false) => {
+  const normalizeMatrixCoordinates = (clientX: number, clientY: number, innerFrame = false): [number, number] => {
     if (!canvasWrapperRef.value) {
-      return { x: 0, y: 0 }
+      return [0, 0]
     }
-    const frameRelPos = {
-      x: innerFrame ? clientX : clientX - canvasWrapperRef.value.getBoundingClientRect().left,
-      y: innerFrame ? clientY : clientY - canvasWrapperRef.value.getBoundingClientRect().top
-    }
-    return {
-      x: Math.round(((frameRelPos.x - innerBoundsOfSVG.value.x) / layerOriginalScaleFactor.value) / transform.value.scale),
-      y: Math.round(((frameRelPos.y - innerBoundsOfSVG.value.y) / layerOriginalScaleFactor.value) / transform.value.scale)
-    }
+    const frameRelPos = [
+      innerFrame ? clientX : clientX - canvasWrapperRef.value.getBoundingClientRect().left,
+      innerFrame ? clientY : clientY - canvasWrapperRef.value.getBoundingClientRect().top
+    ]
+    return [
+      Math.round(((frameRelPos[0] - innerBoundsOfSVG.value.x) / layerOriginalScaleFactor.value) / transform.value.scale),
+      Math.round(((frameRelPos[1] - innerBoundsOfSVG.value.y) / layerOriginalScaleFactor.value) / transform.value.scale)
+    ]
   }
 
   const frozenExposedTransform = ref<Transform>();
