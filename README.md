@@ -1,16 +1,72 @@
-# Vue 3 + TypeScript + Vite
+# Projection Layer
 
-This template should help get you started developing with Vue 3 and TypeScript in Vite. The template uses Vue 3 `<script setup>` SFCs, check out the [script setup docs](https://v3.vuejs.org/api/sfc-script-setup.html#sfc-script-setup) to learn more.
+This vue component provides a layer that projects any coordinates into the real rendeirng viewbox of the canvas. It also provides a straight forward integration of panzoom.
 
-## Recommended IDE Setup
+## Example
 
-- [VS Code](https://code.visualstudio.com/) + [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar)
 
-## Type Support For `.vue` Imports in TS
+```html
+<projection-layer :x="0" :y="0" :width="600" :height="400" panzoom>
+  <template #canvas>
+    <img src="this/image/is/400/with/and/600/height.png" style="height: 100%; width: 100%;" />
+  </template>
+  <template #matrix="{ compose, normalizeMatrixCoordinates }">
+    <svg xmlns="http://www.w3.org/2000/svg">
+      <!--
+        This projects a rectangle at 10,10 width 100,100 size over the image.
+      -->
+      <rect :x="compose.x(10)" :y="compose.y(10)" :width="compose.size(100)" :height="compose.size(100)"/>
+    </svg>
+  </template>
+</projection-layer>
+```
 
-Since TypeScript cannot handle type information for `.vue` imports, they are shimmed to be a generic Vue component type by default. In most cases this is fine if you don't really care about component prop types outside of templates. However, if you wish to get actual prop types in `.vue` imports (for example to get props validation when using manual `h(...)` calls), you can enable Volar's Take Over mode by following these steps:
+## Properties
 
-1. Run `Extensions: Show Built-in Extensions` from VS Code's command palette, look for `TypeScript and JavaScript Language Features`, then right click and select `Disable (Workspace)`. By default, Take Over mode will enable itself if the default TypeScript extension is disabled.
-2. Reload the VS Code window by running `Developer: Reload Window` from the command palette.
+- `width` & `height`: Width & height of the projecting matrix. Shold be the same as the image you are projecting
+- `x` & `y`: X and Y offset of the projecting matrix (should be `0` in mos of the cases)
+- `panzoom`: Wether to init panzoom wheel events
 
-You can learn more about Take Over mode [here](https://github.com/johnsoncodehk/volar/discussions/471).
+## Slots
+
+### Canvas
+
+The canvas. The wrapping container of this slot will always have the aspect ratio of `width` / `height`, so the graphic within fill up `100%` and `100%` of it without offsets, otherwise the contenst within `#matrix` it will not be projedcted correctly.
+
+#### Variables
+
+- `compose`:
+  `x`: Function that converts a x coordinate within the matrix to the "real" coordinate within the layer
+  `y`: Function that converts a y coordinate within the matrix to the "real" coordinate within the layer
+  `size`: Function that converts a size within the matrix to the "real" size within the layer
+- `normalizeMatrixCoordinates`: Accepts `clientX` and `clientY` coordinates and returns their matrix coordinates
+  - **Example:** `normalizeMatrixCoordinates(event.clientX, event.clientY)`
+
+## Exposed
+
+- `compose`:
+  `x`: Function that converts a x coordinate within the matrix to the "real" coordinate within the layer
+  `y`: Function that converts a y coordinate within the matrix to the "real" coordinate within the layer
+  `size`: Function that converts a size within the matrix to the "real" size within the layer
+  
+### `normalizeMatrixCoordinates()`:
+
+Accepts `clientX` and `clientY` coordinates and returns their matrix coordinates
+
+**Example:** `normalizeMatrixCoordinates(event.clientX, event.clientY)`
+
+
+
+### `applyTransform()`
+
+Accepts `x`, `y`, `scale`, `origin` and `anchor` which scales and pans the canvas and the matrix. The `origin` is the origin within the main container while the `anchor` is the internal anchor point of the canvas.
+
+Center the canvas at scale `2`: `applyTransform(0, 0, 2, [0.5, 0.5], [0.5, 0.5])`
+
+### `compose`
+
+Object that contains the compose functions.
+
+- `x`: Function that converts a x coordinate within the matrix to the "real" coordinate within the layer
+- `y`: Function that converts a y coordinate within the matrix to the "real" coordinate within the layer
+- `size`: Function that converts a size within the matrix to the "real" size within the layer

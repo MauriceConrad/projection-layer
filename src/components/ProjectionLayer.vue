@@ -20,10 +20,10 @@ const props = withDefaults(defineProps<{
   y: number;
   width: number;
   height: number;
-  bindPanzoom?: boolean;
+  panzoom?: boolean;
   transform?: Transform;
 }>(), {
-  bindPanzoom: true
+  panzoom: true
 });
 const emit = defineEmits(['update:transform']);
 
@@ -91,7 +91,7 @@ onMounted(() => {
 });
 
 const handleWheelProxy = (event: WheelEvent) => {
-  if (props.bindPanzoom) {
+  if (props.panzoom) {
     handleWheel(event);
   }
 }
