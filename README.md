@@ -33,6 +33,10 @@ This vue component provides a layer that projects any coordinates into the real 
 
 The canvas. The wrapping container of this slot will always have the aspect ratio of `width` / `height`, so the graphic within fill up `100%` and `100%` of it without offsets, otherwise the contenst within `#matrix` it will not be projedcted correctly.
 
+### Matrix
+
+THis wraps the matrix projection and directly give access to `compose` and `normalizeMatrixCoordinates`
+
 #### Variables
 
 - `compose`:
@@ -70,3 +74,4 @@ Object that contains the compose functions.
 - `x`: Function that converts a x coordinate within the matrix to the "real" coordinate within the layer
 - `y`: Function that converts a y coordinate within the matrix to the "real" coordinate within the layer
 - `size`: Function that converts a size within the matrix to the "real" size within the layer
+
