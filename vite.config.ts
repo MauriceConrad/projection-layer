@@ -11,7 +11,7 @@ export default defineConfig({
     lib: {
       entry: path.resolve('src/index.ts'),
       name: 'Projection Layer',
-      fileName: (format) => `project-layer.${ format }.js`,
+      fileName: (format) => `projection-layer.${ format }.js`,
       formats: ['es', 'umd'/*, 'cjs', 'amd', 'iife', 'system'*/],
     },
     rollupOptions: {
