@@ -9,8 +9,6 @@ export default function useElementBBox(elementRef: Ref<Element | undefined>) {
   });
   const updateBBox = () => {
     if (elementRef.value) {
-      //console.log(elementRef.value);
-      
       const bounding = elementRef.value.getBoundingClientRect();
       bbox.x = bounding.x;
       bbox.y = bounding.y;

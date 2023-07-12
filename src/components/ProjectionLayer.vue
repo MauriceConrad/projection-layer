@@ -1,9 +1,9 @@
 <template>
   <div ref="projectionLayerRef" class="projection-layer" :style="{ '--natural-width': width, '--natural-height': height, '--natural-ratio': width / height, '--projection-layer-width': projectionLayerBBox.width, '--projection-layer-height': projectionLayerBBox.height, '--canvas-width': canvasSize.width, '--canvas-height': canvasSize.height }" @wheel="handleWheelProxy">
-    <div ref="canvasRef" class="canvas">
+    <div ref="canvasRef" class="canvas" :style="{ width: canvasSize.width + 'px', height: canvasSize.height + 'px' }">
       <slot name="canvas" />
     </div>
-    <div class="matrix">
+    <div ref="matrixRef" class="matrix">
       <slot name="matrix" :compose="compose" :normalize-matrix-coordinates="normalizeMatrixCoordinates" />
     </div>
   </div>
@@ -20,9 +20,16 @@ const props = withDefaults(defineProps<{
   y: number;
   width: number;
   height: number;
+  offset?: {
+    left: number;
+    top: number;
+    bottom: number;
+    right: number;
+  };
   panzoom?: boolean;
   transform?: Transform;
 }>(), {
+  offset: () => ({ left: 0, top: 0, right: 0, bottom: 0 }),
   panzoom: true
 });
 const emit = defineEmits(['update:transform']);
@@ -30,18 +37,30 @@ const emit = defineEmits(['update:transform']);
 const ratio = computed(() => props.width / props.height);
 
 const projectionLayerRef = ref<HTMLDivElement>();
-const projectionLayerBBox = useElementBBox(projectionLayerRef);
+const projectionLayerBBoxOriginal = useElementBBox(projectionLayerRef);
+const projectionLayerBBox = computed(() => {
+  return {
+    x: projectionLayerBBoxOriginal.x + props.offset.left,
+    y: projectionLayerBBoxOriginal.y + props.offset.top,
+    width: projectionLayerBBoxOriginal.width - props.offset.left - props.offset.right,
+    height: projectionLayerBBoxOriginal.height - props.offset.top - props.offset.bottom
+  }
+});
 const canvasRef = ref<HTMLDivElement>();
+const matrixRef = ref<HTMLDivElement>();
 
 const layerOrgScale = computed(() => canvasSize.value.width / props.width);
 
 
 const { transform, handleWheel, normalizeMatrixCoordinates, setTransform } = usePanzoom(canvasRef, computed(() => ({ x: props.x, y: props.y, width: props.width, height: props.height })), layerOrgScale);
 
-function applyTransform(x: number, y: number, scale: number, origin: [number, number], canvasAnchor: [number, number]) {
+function __applyTransform(x: number, y: number, scale: number, origin: [number, number], canvasAnchor: [number, number]) {
+  if (isNaN(x) || isNaN(y)) {
+    return;
+  }
   const realOrigin = [
-    projectionLayerBBox.width * origin[0],
-    projectionLayerBBox.height * origin[1]
+    projectionLayerBBox.value.width * origin[0],
+    projectionLayerBBox.value.height * origin[1]
   ];
   const realX = (x + realOrigin[0]) - canvasAnchor[0] * (canvasSize.value.width * scale);
   const realY = (y + realOrigin[1]) - canvasAnchor[1] * (canvasSize.value.height * scale);
@@ -52,25 +71,17 @@ function applyTransform(x: number, y: number, scale: number, origin: [number, nu
     scale
   });
 }
-watch(() => props.transform, () => {
-  if (props.transform) {
-    applyTransform(props.transform.x, props.transform.y, props.transform.scale, [0, 0], [0, 0]);
-  }
-});
-watch(transform, () => {
-  if (!_.isEqual(transform.value, props.transform)) {
-    emit('update:transform', transform.value);
-  }
-});
+function applyTransform(x: number, y: number, scale: number, origin: [number, number], canvasAnchor: [number, number]) {
+  return __applyTransform(x + props.offset.left, y + props.offset.top, scale, origin, canvasAnchor);
+}
 
 const canvasSize = computed(() => {
-  const width = Math.min(projectionLayerBBox.height * ratio.value, projectionLayerBBox.width);
+  const width = Math.min(projectionLayerBBox.value.height * ratio.value, projectionLayerBBox.value.width);
   return {
     width,
     height: width / ratio.value
   }
 });
-
 
 const compose = {
   x(x: number) {
@@ -84,21 +95,39 @@ const compose = {
   }
 }
 
-onMounted(() => {
-  nextTick(() => {
-    applyTransform(0, 0, 1, [0.5, 0.5], [0.5, 0.5]);
-  });
-});
-
 const handleWheelProxy = (event: WheelEvent) => {
   if (props.panzoom) {
     handleWheel(event);
   }
 }
 
+watch(() => props.transform, () => {
+  if (props.transform) {
+    applyTransform(props.transform.x, props.transform.y, props.transform.scale, [0, 0], [0, 0]);
+  }
+});
+watch(transform, () => {
+  if (!_.isEqual(transform.value, props.transform)) {
+    emit('update:transform', {
+      scale: transform.value.scale,
+      x: transform.value.x - props.offset.left,
+      y: transform.value.y - props.offset.top
+    });
+  }
+});
+onMounted(() => {
+  nextTick(() => {
+    applyTransform(0, 0, 1, [0.5, 0.5], [0.5, 0.5]);
+  });
+});
+
+
 defineExpose({
   compose,
+  matrix: matrixRef,
+  canvas: canvasRef,
   applyTransform,
+  setTransform,
   normalizeMatrixCoordinates
 });
 

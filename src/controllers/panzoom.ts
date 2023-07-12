@@ -94,11 +94,7 @@ export default function usePanzoom(canvasWrapperRef: Ref<HTMLElement | undefined
   // });
 
   const setTransform = (newTransform: Transform) => {
-    console.log(newTransform);
-    
     if (pz.value && !_.isEqual(newTransform, exposedTransform.value)) {
-      console.log('->');
-      
       const updatedTransform = pz.value.zoomToPoint(newTransform.scale, { clientX: window.innerWidth / 2, clientY: window.innerHeight / 2 });
       pz.value.pan(newTransform.x, newTransform.y, {});
       updateTransform(updatedTransform);
@@ -113,7 +109,6 @@ export default function usePanzoom(canvasWrapperRef: Ref<HTMLElement | undefined
           try {
             
             const transformValueRaw = window.getComputedStyle(canvasWrapperRef.value).getPropertyValue('transform');
-
             const transformRawValueMatching = transformValueRaw.match(CSS_TRANSFORM_MATRIX_VALUES);
             if (transformRawValueMatching) {
               const [ , valuesListStr ] = transformRawValueMatching;
