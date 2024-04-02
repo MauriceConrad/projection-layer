@@ -226,107 +226,25 @@ export default function usePanzoom(
       touchStarts = touchStarts = freezeTouches(event.touches);
     }
   };
-
-  // Pinch Zoom Handling
-  // let pinchZoomInProgress = false;
-  // let initialDistance = 0;
-  // let initialScale = 0;
-
-  // const pinchZoomStart = (event: TouchEvent) => {
-  //   pinchZoomInProgress = true;
-  //   const touch1 = event.touches[0];
-  //   const touch2 = event.touches[1];
-  //   initialDistance = Math.hypot(
-  //     touch1.clientX - touch2.clientX,
-  //     touch1.clientY - touch2.clientY
-  //   );
-  //   initialScale = pz.value!.getScale();
-  // };
-
-  // const pinchZoomMove = (event: TouchEvent) => {
-  //   if (pinchZoomInProgress && event.touches.length === 2) {
-  //     const touch1 = event.touches[0];
-  //     const touch2 = event.touches[1];
-  //     const distance = Math.hypot(
-  //       touch1.clientX - touch2.clientX,
-  //       touch1.clientY - touch2.clientY
-  //     );
-  //     const scaleDelta = (distance - initialDistance) / 100;
-  //     const scale = initialScale + scaleDelta;
-
-  //     // Calculate the center point of pinch zoom
-  //     const centerX = (touch1.clientX + touch2.clientX) / 2;
-  //     const centerY = (touch1.clientY + touch2.clientY) / 2;
-
-  //     pz.value!.zoomToPoint(scale, { clientX: centerX, clientY: centerY }, {});
-  //   }
-  // };
-  // const pinchZoomMove = (event: TouchEvent) => {
-  //   if (pinchZoomInProgress && event.touches.length === 2) {
-  //     const touch1 = event.touches[0];
-  //     const touch2 = event.touches[1];
-  //     const distance = Math.hypot(
-  //       touch1.clientX - touch2.clientX,
-  //       touch1.clientY - touch2.clientY
-  //     );
-  //     const scaleDelta = (distance - initialDistance) / 100;
-  //     const scale = initialScale + scaleDelta;
-
-  //     // Calculate the center point of pinch zoom
-  //     const centerX = (touch1.clientX + touch2.clientX) / 2;
-  //     const centerY = (touch1.clientY + touch2.clientY) / 2;
-
-  //     // Calculate the scale factor based on the current zoom level
-  //     const scaleFactor = scale / pz.value!.getScale();
-
-  //     // Adjust the center point based on the current pan position
-  //     const pan = pz.value!.getPan();
-  //     const adjustedCenterX = (centerX - pan.x) / scaleFactor + pan.x;
-  //     const adjustedCenterY = (centerY - pan.y) / scaleFactor + pan.y;
-
-  //     pz.value!.zoomToPoint(
-  //       scale,
-  //       { clientX: adjustedCenterX, clientY: adjustedCenterY },
-  //       {}
-  //     );
-  //   }
-  // };
-
-  // const pinchZoomEnd = () => {
-  //   pinchZoomInProgress = false;
-  // };
-
-  // Pan Handling
-  // let panInProgress = false;
-  // let lastTouchX = 0;
-  // let lastTouchY = 0;
-
-  // const panStart = (event: TouchEvent) => {
-  //   panInProgress = true;
-  //   const touch = event.touches[0];
-  //   lastTouchX = touch.clientX;
-  //   lastTouchY = touch.clientY;
-  // };
-
-  // const panMove = (event: TouchEvent) => {
-  //   if (panInProgress && event.touches.length === 1) {
-  //     const touch = event.touches[0];
-  //     const deltaX = touch.clientX - lastTouchX;
-  //     const deltaY = touch.clientY - lastTouchY;
-  //     lastTouchX = touch.clientX;
-  //     lastTouchY = touch.clientY;
-
-  //     const currScale = pz.value!.getScale();
-  //     const pan = pz.value!.getPan();
-  //     const x = pan.x - deltaX / currScale;
-  //     const y = pan.y - deltaY / currScale;
-  //     pz.value!.pan(x, y, {});
-  //   }
-  // };
-
-  // const panEnd = () => {
-  //   panInProgress = false;
-  // };
+  let dragStart: [number, number] | null = null;
+  let dragStartFrozenPan: { x: number; y: number } | null = null;
+  const handleMouseDown = (event: MouseEvent) => {
+    dragStart = [event.clientX, event.clientY];
+    dragStartFrozenPan = pz.value!.getPan();
+  };
+  const handleMouseUp = (event: MouseEvent) => {
+    dragStart = null;
+    dragStartFrozenPan = null;
+  };
+  const handleMouseMove = (event: MouseEvent) => {
+    if (dragStart && dragStartFrozenPan) {
+      const deltaX = event.clientX - dragStart[0];
+      const deltaY = event.clientY - dragStart[1];
+      const x = dragStartFrozenPan.x - -deltaX / pz.value!.getScale();
+      const y = dragStartFrozenPan.y - -deltaY / pz.value!.getScale();
+      pz.value!.pan(x, y, {});
+    }
+  };
 
   const normalizeMatrixCoordinates = (
     clientX: number,
@@ -446,6 +364,9 @@ export default function usePanzoom(
     nativeTransform: transform,
     setTransform,
     handleWheel,
+    handleMouseDown,
+    handleMouseUp,
+    handleMouseMove,
     handleTouchStart,
     handleTouchMove,
     handleTouchEnd,

@@ -12,9 +12,8 @@
       '--canvas-height': canvasSize.height,
     }"
     @wheel="handleWheelProxy"
-    @touchstart="handleTouchStart"
-    @touchmove="handleTouchMove"
-    @touchend="handleTouchEnd"
+    @touchstart="handleTouchStartProxy"
+    @mousedown="handleMouseDownProxy"
   >
     <div
       ref="canvasRef"
@@ -41,6 +40,7 @@ import {
   computed,
   nextTick,
   onMounted,
+  onUnmounted,
   ref,
   toRef,
   watch,
@@ -65,10 +65,16 @@ const props = withDefaults(
     };
     panzoom?: boolean;
     transform?: Transform;
+    wheel?: boolean;
+    touch?: boolean;
+    mouse?: boolean;
   }>(),
   {
     offset: () => ({ left: 0, top: 0, right: 0, bottom: 0 }),
     panzoom: true,
+    wheel: true,
+    touch: true,
+    mouse: true,
   }
 );
 const emit = defineEmits(["update:transform"]);
@@ -86,6 +92,9 @@ const {
   __applyTransform,
   transform,
   handleWheel,
+  handleMouseDown,
+  handleMouseMove,
+  handleMouseUp,
   handleTouchEnd,
   handleTouchMove,
   handleTouchStart,
@@ -105,10 +114,11 @@ const {
   layerOrgScale
 );
 
-watch(projectionLayerBBox, () => {
-  if (props.panzoom) {
-    applyTransform(props.x, props.y, 1, [0.5, 0.5], [0.5, 0.5], false);
-  }
+// watch(projectionLayerBBox, () => {
+//   applyTransform(props.x, props.y, 1, [0.5, 0.5], [0.5, 0.5], false);
+// });
+onMounted(() => {
+  applyTransform(props.x, props.y, 1, [0.5, 0.5], [0.5, 0.5], false);
 });
 
 function applyTransform(
@@ -142,10 +152,52 @@ const compose = {
 };
 
 const handleWheelProxy = (event: WheelEvent) => {
-  if (props.panzoom) {
+  if (props.wheel) {
     handleWheel(event);
   }
 };
+const handleTouchEndProxy = (event: TouchEvent) => {
+  if (props.touch) {
+    handleTouchEnd(event);
+  }
+};
+const handleTouchMoveProxy = (event: TouchEvent) => {
+  if (props.touch) {
+    handleTouchMove(event);
+  }
+};
+const handleTouchStartProxy = (event: TouchEvent) => {
+  if (props.touch) {
+    handleTouchStart(event);
+  }
+};
+const handleMouseDownProxy = (event: MouseEvent) => {
+  if (props.mouse) {
+    handleMouseDown(event);
+  }
+};
+const handleMouseMoveProxy = (event: MouseEvent) => {
+  if (props.mouse) {
+    handleMouseMove(event);
+  }
+};
+const handleMouseUpProxy = (event: MouseEvent) => {
+  if (props.mouse) {
+    handleMouseUp(event);
+  }
+};
+
+window.addEventListener("mousemove", handleMouseMoveProxy);
+window.addEventListener("mouseup", handleMouseUpProxy);
+window.addEventListener("touchmove", handleTouchMoveProxy);
+window.addEventListener("touchend", handleTouchEndProxy);
+
+onUnmounted(() => {
+  window.removeEventListener("mousemove", handleMouseMoveProxy);
+  window.removeEventListener("mouseup", handleMouseUpProxy);
+  window.removeEventListener("touchmove", handleTouchMoveProxy);
+  window.removeEventListener("touchend", handleTouchEndProxy);
+});
 
 watch(
   () => props.transform,
