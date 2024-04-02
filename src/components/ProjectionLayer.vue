@@ -235,6 +235,7 @@ defineExpose({
   applyTransform,
   setTransform,
   normalizeMatrixCoordinates,
+  projectionLayerBBox,
 });
 </script>
 
