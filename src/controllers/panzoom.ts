@@ -71,16 +71,15 @@ export default function usePanzoom(
     };
   });
 
-  function __applyTransform(
+  function __calcTransform(
     x: number,
     y: number,
     scale: number,
     origin: [number, number],
-    canvasAnchor: [number, number],
-    animate: boolean
+    canvasAnchor: [number, number]
   ) {
     if (isNaN(x) || isNaN(y)) {
-      return;
+      throw new Error("x and y must be a number");
     }
     const realOrigin = [
       projectionLayerBBox.value.width * origin[0],
@@ -91,10 +90,33 @@ export default function usePanzoom(
     const realY =
       y + realOrigin[1] - canvasAnchor[1] * (canvasSize.value.height * scale);
 
+    return {
+      x: realX / scale + ((scale - 1) * canvasSize.value.width) / scale / 2,
+      y: realY / scale + ((scale - 1) * canvasSize.value.height) / scale / 2,
+      scale,
+    };
+  }
+
+  function __applyTransform(
+    x: number,
+    y: number,
+    scale: number,
+    origin: [number, number],
+    canvasAnchor: [number, number],
+    animate: boolean
+  ) {
+    const { x: translateX, y: translateY } = __calcTransform(
+      x,
+      y,
+      scale,
+      origin,
+      canvasAnchor
+    );
+
     setTransform(
       {
-        x: realX / scale + ((scale - 1) * canvasSize.value.width) / scale / 2,
-        y: realY / scale + ((scale - 1) * canvasSize.value.height) / scale / 2,
+        x: translateX,
+        y: translateY,
         scale,
       },
       animate
@@ -357,6 +379,7 @@ export default function usePanzoom(
     projectionLayerBBox,
     ratio,
     canvasSize,
+    __calcTransform,
     __applyTransform,
     transform: exposedTransform,
     normalizeMatrixCoordinates,
