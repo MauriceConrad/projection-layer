@@ -26,26 +26,13 @@
       <slot name="canvas" />
     </div>
     <div ref="matrixRef" class="matrix">
-      <slot
-        name="matrix"
-        :compose="compose"
-        :normalize-matrix-coordinates="normalizeMatrixCoordinates"
-      />
+      <slot name="matrix" :compose="compose" :normalize-matrix-coordinates="normalizeMatrixCoordinates" />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import {
-  computed,
-  nextTick,
-  onMounted,
-  onUnmounted,
-  ref,
-  toRef,
-  watch,
-  watchEffect,
-} from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, toRef, watch, watchEffect } from "vue";
 import useElementBBox from "../controllers/elementBBox";
 import usePanzoom, { Transform } from "../controllers/panzoom";
 import _ from "lodash";
@@ -130,14 +117,10 @@ function applyTransform(
   canvasAnchor: [number, number],
   animate = false
 ) {
-  return __applyTransform(
-    x + props.offset.left,
-    y + props.offset.top,
-    scale,
-    origin,
-    canvasAnchor,
-    animate
-  );
+  if (isNaN(x) || isNaN(y) || isNaN(props.offset.left) || isNaN(props.offset.top) || isNaN(scale)) {
+    return;
+  }
+  return __applyTransform(x + props.offset.left, y + props.offset.top, scale, origin, canvasAnchor, animate);
 }
 
 const compose = {
@@ -204,13 +187,7 @@ watch(
   () => props.transform,
   () => {
     if (props.transform) {
-      applyTransform(
-        props.transform.x,
-        props.transform.y,
-        props.transform.scale,
-        [0, 0],
-        [0, 0]
-      );
+      applyTransform(props.transform.x, props.transform.y, props.transform.scale, [0, 0], [0, 0]);
     }
   }
 );
@@ -254,12 +231,8 @@ defineExpose({
     //--width: min(calc((var(--projection-layer-height) * var(--natural-ratio) * 1px)), calc(var(--projection-layer-width) * 1px));
     width: calc(var(--canvas-width) * 1px);
     height: calc(var(--canvas-height) * 1px);
-    transform: translateX(
-        calc((var(--projection-layer-width) - var(--canvas-width)) / 2 * 1px)
-      )
-      translateY(
-        calc((var(--projection-layer-height) - var(--canvas-height)) / 2 * 1px)
-      );
+    transform: translateX(calc((var(--projection-layer-width) - var(--canvas-width)) / 2 * 1px))
+      translateY(calc((var(--projection-layer-height) - var(--canvas-height)) / 2 * 1px));
     //transform: translate(0px, 0px);
   }
   .matrix {
