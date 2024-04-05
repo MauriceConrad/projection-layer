@@ -110,6 +110,10 @@ export default function usePanzoom(
     }
   });
   const updateTransform = (newTransform: Transform) => {
+    //to avoid recursive loop
+    if (_.isEqual(transform.value, newTransform)) {
+      return;
+    }
     transform.value = newTransform;
   };
 
