@@ -35,7 +35,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, toRef, watch, watchEffect } from "vue";
 import useElementBBox from "../controllers/elementBBox";
 import usePanzoom, { Transform } from "../controllers/panzoom";
-import _ from "lodash";
+import _, { throttle } from "lodash";
 import { useElementBounding } from "@vueuse/core";
 
 const props = withDefaults(
@@ -135,21 +135,21 @@ const compose = {
   },
 };
 
-const handleWheelProxy = (event: WheelEvent) => {
+const handleWheelProxy = throttle((event: WheelEvent) => {
   if (props.wheel) {
     handleWheel(event);
   }
-};
+}, 100);
 const handleTouchEndProxy = (event: TouchEvent) => {
   if (props.touch) {
     handleTouchEnd(event);
   }
 };
-const handleTouchMoveProxy = (event: TouchEvent) => {
+const handleTouchMoveProxy = throttle((event: TouchEvent) => {
   if (props.touch) {
     handleTouchMove(event);
   }
-};
+}, 100);
 const handleTouchStartProxy = (event: TouchEvent) => {
   if (props.touch) {
     handleTouchStart(event);
@@ -160,11 +160,11 @@ const handleMouseDownProxy = (event: MouseEvent) => {
     handleMouseDown(event);
   }
 };
-const handleMouseMoveProxy = (event: MouseEvent) => {
+const handleMouseMoveProxy = throttle((event: MouseEvent) => {
   if (props.mouse) {
     handleMouseMove(event);
   }
-};
+}, 100);
 const handleMouseUpProxy = (event: MouseEvent) => {
   if (props.mouse) {
     handleMouseUp(event);
