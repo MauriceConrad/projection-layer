@@ -12,8 +12,6 @@
       '--canvas-height': canvasSize.height,
     }"
     @wheel="handleWheelProxy"
-    @touchstart="handleTouchStartProxy"
-    @mousedown="handleMouseDownProxy"
   >
     <div
       ref="canvasRef"
@@ -26,17 +24,20 @@
       <slot name="canvas" />
     </div>
     <div ref="matrixRef" class="matrix">
-      <slot name="matrix" :compose="compose" :normalize-matrix-coordinates="normalizeMatrixCoordinates" />
+      <slot
+        name="matrix"
+        :compose="compose"
+        :normalize-matrix-coordinates="normalizeMatrixCoordinates"
+      />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, toRef, watch, watchEffect } from "vue";
+import { computed, nextTick, onMounted, ref, watch, watchEffect } from "vue";
 import useElementBBox from "../controllers/elementBBox";
 import usePanzoom, { Transform } from "../controllers/panzoom";
-import _, { throttle } from "lodash";
-import { useElementBounding } from "@vueuse/core";
+import _ from "lodash";
 
 const props = withDefaults(
   defineProps<{
@@ -52,76 +53,103 @@ const props = withDefaults(
     };
     panzoom?: boolean;
     transform?: Transform;
-    wheel?: boolean;
-    touch?: boolean;
-    mouse?: boolean;
   }>(),
   {
     offset: () => ({ left: 0, top: 0, right: 0, bottom: 0 }),
     panzoom: true,
-    wheel: true,
-    touch: true,
-    mouse: true,
   }
 );
 const emit = defineEmits(["update:transform"]);
 
+const ratio = computed(() => props.width / props.height);
+
 const projectionLayerRef = ref<HTMLDivElement>();
+const projectionLayerBBoxOriginal = useElementBBox(projectionLayerRef);
+const projectionLayerBBox = computed(() => {
+  return {
+    x: projectionLayerBBoxOriginal.x + props.offset.left,
+    y: projectionLayerBBoxOriginal.y + props.offset.top,
+    width:
+      projectionLayerBBoxOriginal.width -
+      props.offset.left -
+      props.offset.right,
+    height:
+      projectionLayerBBoxOriginal.height -
+      props.offset.top -
+      props.offset.bottom,
+  };
+});
+// watchEffect(() => {
+//   console.log(projectionLayerBBox.value);
+// });
 const canvasRef = ref<HTMLDivElement>();
 const matrixRef = ref<HTMLDivElement>();
 
 const layerOrgScale = computed(() => canvasSize.value.width / props.width);
 
-const {
-  projectionLayerBBox,
-  ratio,
-  canvasSize,
-  __calcTransform,
-  __applyTransform,
-  transform,
-  handleWheel,
-  handleMouseDown,
-  handleMouseMove,
-  handleMouseUp,
-  handleTouchEnd,
-  handleTouchMove,
-  handleTouchStart,
-  normalizeMatrixCoordinates,
-  setTransform,
-} = usePanzoom(
-  projectionLayerRef,
-  canvasRef,
+const { transform, handleWheel, normalizeMatrixCoordinates, setTransform } =
+  usePanzoom(
+    canvasRef,
+    computed(() => ({
+      x: props.x,
+      y: props.y,
+      width: props.width,
+      height: props.height,
+    })),
+    layerOrgScale
+  );
 
-  computed(() => ({
-    x: props.x,
-    y: props.y,
-    width: props.width,
-    height: props.height,
-  })),
-  toRef(props, "offset"),
-  layerOrgScale
-);
+function __applyTransform(
+  x: number,
+  y: number,
+  scale: number,
+  origin: [number, number],
+  canvasAnchor: [number, number]
+) {
+  if (isNaN(x) || isNaN(y)) {
+    return;
+  }
+  const realOrigin = [
+    projectionLayerBBox.value.width * origin[0],
+    projectionLayerBBox.value.height * origin[1],
+  ];
+  const realX =
+    x + realOrigin[0] - canvasAnchor[0] * (canvasSize.value.width * scale);
+  const realY =
+    y + realOrigin[1] - canvasAnchor[1] * (canvasSize.value.height * scale);
 
-// watch(projectionLayerBBox, () => {
-//   applyTransform(props.x, props.y, 1, [0.5, 0.5], [0.5, 0.5], false);
-// });
-onMounted(() => {
-  applyTransform(props.x, props.y, 1, [0.5, 0.5], [0.5, 0.5], false);
-});
-
+  setTransform({
+    x: realX / scale + ((scale - 1) * canvasSize.value.width) / scale / 2,
+    y: realY / scale + ((scale - 1) * canvasSize.value.height) / scale / 2,
+    scale,
+  });
+}
 function applyTransform(
   x: number,
   y: number,
   scale: number,
   origin: [number, number],
-  canvasAnchor: [number, number],
-  animate = false
+  canvasAnchor: [number, number]
 ) {
-  if (isNaN(x) || isNaN(y) || isNaN(props.offset.left) || isNaN(props.offset.top) || isNaN(scale)) {
-    return;
-  }
-  return __applyTransform(x + props.offset.left, y + props.offset.top, scale, origin, canvasAnchor, animate);
+  return __applyTransform(
+    x + props.offset.left,
+    y + props.offset.top,
+    scale,
+    origin,
+    canvasAnchor
+  );
 }
+
+const canvasSize = computed(() => {
+  const width = Math.min(
+    projectionLayerBBox.value.height * ratio.value,
+    projectionLayerBBox.value.width
+  );
+  return {
+    width,
+    height: width / ratio.value,
+  };
+});
 
 const compose = {
   x(x: number) {
@@ -135,59 +163,23 @@ const compose = {
   },
 };
 
-const handleWheelProxy = throttle((event: WheelEvent) => {
-  if (props.wheel) {
+const handleWheelProxy = (event: WheelEvent) => {
+  if (props.panzoom) {
     handleWheel(event);
   }
-}, 100);
-const handleTouchEndProxy = (event: TouchEvent) => {
-  if (props.touch) {
-    handleTouchEnd(event);
-  }
 };
-const handleTouchMoveProxy = throttle((event: TouchEvent) => {
-  if (props.touch) {
-    handleTouchMove(event);
-  }
-}, 100);
-const handleTouchStartProxy = (event: TouchEvent) => {
-  if (props.touch) {
-    handleTouchStart(event);
-  }
-};
-const handleMouseDownProxy = (event: MouseEvent) => {
-  if (props.mouse) {
-    handleMouseDown(event);
-  }
-};
-const handleMouseMoveProxy = throttle((event: MouseEvent) => {
-  if (props.mouse) {
-    handleMouseMove(event);
-  }
-}, 100);
-const handleMouseUpProxy = (event: MouseEvent) => {
-  if (props.mouse) {
-    handleMouseUp(event);
-  }
-};
-
-window.addEventListener("mousemove", handleMouseMoveProxy);
-window.addEventListener("mouseup", handleMouseUpProxy);
-window.addEventListener("touchmove", handleTouchMoveProxy);
-window.addEventListener("touchend", handleTouchEndProxy);
-
-onUnmounted(() => {
-  window.removeEventListener("mousemove", handleMouseMoveProxy);
-  window.removeEventListener("mouseup", handleMouseUpProxy);
-  window.removeEventListener("touchmove", handleTouchMoveProxy);
-  window.removeEventListener("touchend", handleTouchEndProxy);
-});
 
 watch(
   () => props.transform,
   () => {
     if (props.transform) {
-      applyTransform(props.transform.x, props.transform.y, props.transform.scale, [0, 0], [0, 0]);
+      applyTransform(
+        props.transform.x,
+        props.transform.y,
+        props.transform.scale,
+        [0, 0],
+        [0, 0]
+      );
     }
   }
 );
@@ -210,11 +202,9 @@ defineExpose({
   compose,
   matrix: matrixRef,
   canvas: canvasRef,
-  __calcTransform,
   applyTransform,
   setTransform,
   normalizeMatrixCoordinates,
-  projectionLayerBBox,
 });
 </script>
 
@@ -231,8 +221,12 @@ defineExpose({
     //--width: min(calc((var(--projection-layer-height) * var(--natural-ratio) * 1px)), calc(var(--projection-layer-width) * 1px));
     width: calc(var(--canvas-width) * 1px);
     height: calc(var(--canvas-height) * 1px);
-    transform: translateX(calc((var(--projection-layer-width) - var(--canvas-width)) / 2 * 1px))
-      translateY(calc((var(--projection-layer-height) - var(--canvas-height)) / 2 * 1px));
+    transform: translateX(
+        calc((var(--projection-layer-width) - var(--canvas-width)) / 2 * 1px)
+      )
+      translateY(
+        calc((var(--projection-layer-height) - var(--canvas-height)) / 2 * 1px)
+      );
     //transform: translate(0px, 0px);
   }
   .matrix {

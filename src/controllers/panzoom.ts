@@ -1,7 +1,7 @@
-import { Ref, computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
+import { Ref, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import Panzoom from "@panzoom/panzoom";
 import _ from "lodash";
-import { useElementBounding } from "@vueuse/core";
+import useElementBBox from "./elementBBox";
 
 export type Transform = {
   x: number;
@@ -15,88 +15,23 @@ export type BBox = {
   height: number;
 };
 
-export const CSS_TRANSFORM_MATRIX_VALUES = /(([-+]?(?:(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)(,\s*)?){6})/;
+export const CSS_TRANSFORM_MATRIX_VALUES =
+  /(([-+]?(?:(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)(,\s*)?){6})/;
 
 export default function usePanzoom(
-  projectionLayerRef: Ref<HTMLElement | undefined>,
   canvasWrapperRef: Ref<HTMLElement | undefined>,
   innerBoundsOfSVG: Ref<BBox>,
-  offset: Ref<{ top: number; right: number; bottom: number; left: number }>,
   layerOriginalScaleFactor: Ref<number>
 ) {
   const pz = ref<ReturnType<typeof Panzoom>>();
   const transform = ref<Transform>({ x: 0, y: 0, scale: 1 });
   const exposedTransform = ref(transform.value);
 
+  const canvasBBox = useElementBBox(canvasWrapperRef);
+
   const paused = ref(false);
 
-  const {
-    x: projectionLayerX,
-    y: projectionLayerY,
-    width: projectionLayerWidth,
-    height: projectionLayerHeight,
-  } = useElementBounding(projectionLayerRef);
-  const projectionLayerBBox = computed(() => {
-    return {
-      x: projectionLayerX.value + offset.value.left,
-      y: projectionLayerY.value + offset.value.top,
-      width: projectionLayerWidth.value - offset.value.left - offset.value.right,
-      height: projectionLayerHeight.value - offset.value.top - offset.value.bottom,
-    };
-  });
-
-  const ratio = computed(() => innerBoundsOfSVG.value.width / innerBoundsOfSVG.value.height);
-
-  const canvasSize = computed(() => {
-    const width = Math.min(projectionLayerBBox.value.height * ratio.value, projectionLayerBBox.value.width);
-    return {
-      width,
-      height: width / ratio.value,
-    };
-  });
-
-  function __calcTransform(
-    x: number,
-    y: number,
-    scale: number,
-    origin: [number, number],
-    canvasAnchor: [number, number]
-  ) {
-    if (isNaN(x) || isNaN(y)) {
-      throw new Error("x and y must be a number");
-    }
-    const realOrigin = [projectionLayerBBox.value.width * origin[0], projectionLayerBBox.value.height * origin[1]];
-    const realX = x + realOrigin[0] - canvasAnchor[0] * (canvasSize.value.width * scale);
-    const realY = y + realOrigin[1] - canvasAnchor[1] * (canvasSize.value.height * scale);
-
-    return {
-      x: realX / scale + ((scale - 1) * canvasSize.value.width) / scale / 2,
-      y: realY / scale + ((scale - 1) * canvasSize.value.height) / scale / 2,
-      scale,
-    };
-  }
-
-  function __applyTransform(
-    x: number,
-    y: number,
-    scale: number,
-    origin: [number, number],
-    canvasAnchor: [number, number],
-    animate: boolean
-  ) {
-    const { x: translateX, y: translateY } = __calcTransform(x, y, scale, origin, canvasAnchor);
-
-    setTransform(
-      {
-        x: translateX,
-        y: translateY,
-        scale,
-      },
-      animate
-    );
-  }
-
-  watch(transform, ({ x, y, scale }) => {
+  watch([transform, canvasBBox], ([{ x, y, scale }]) => {
     if (canvasWrapperRef.value) {
       const { width, height } = canvasWrapperRef.value.getBoundingClientRect();
       const offsetX = (width / scale) * (1 - scale) * 0.5;
@@ -110,10 +45,6 @@ export default function usePanzoom(
     }
   });
   const updateTransform = (newTransform: Transform) => {
-    //to avoid recursive loop
-    if (_.isEqual(transform.value, newTransform)) {
-      return;
-    }
     transform.value = newTransform;
   };
 
@@ -142,101 +73,33 @@ export default function usePanzoom(
     }
   };
 
-  // let touchStartPositions: [number, number][] | null = null;
-  let touchStarts:
-    | {
-        client: [number, number];
-        canvasRel: [number, number];
-      }[]
-    | null = null;
-  let touchStartScale = 1;
-  const freezeTouches = (touches: TouchList) => {
-    return Array.from(touches).map((touch) => {
-      const innerCanvasCoords = normalizeMatrixCoordinates(touch.clientX, touch.clientY);
-      return {
-        client: [touch.clientX, touch.clientY] as [number, number],
-        canvasRel: [
-          innerCanvasCoords[0] / innerBoundsOfSVG.value.width,
-          innerCanvasCoords[1] / innerBoundsOfSVG.value.height,
-        ] as [number, number],
-      };
-    });
-  };
-
-  const handleTouchStart = (event: TouchEvent) => {
-    touchStarts = freezeTouches(event.touches);
-    touchStartScale = pz.value!.getScale();
-  };
-
-  const handleTouchMove = (event: TouchEvent) => {
-    event.preventDefault(); // Prevent default touch behavior
-    // const projectionLayerElement = canvasWrapperRef.value!.parentElement!;
-    if (touchStarts) {
-      const touchPositions = Array.from(event.touches).map((touch) => [touch.clientX, touch.clientY]);
-
-      const newScale = (() => {
-        if (touchStarts.length >= 2 && touchPositions.length >= 2) {
-          const touchStartPositionsTwoFingerDiff = Math.sqrt(
-            (touchStarts[1].client[0] - touchStarts[0].client[0]) ** 2 +
-              (touchStarts[1].client[1] - touchStarts[0].client[1]) ** 2
-          );
-          const touchPositionsTwoFingerDiff = Math.sqrt(
-            (touchPositions[1][0] - touchPositions[0][0]) ** 2 + (touchPositions[1][1] - touchPositions[0][1]) ** 2
-          );
-          return touchStartScale * (touchPositionsTwoFingerDiff / touchStartPositionsTwoFingerDiff);
-        } else {
-          return touchStartScale;
-        }
-      })();
-
-      const innerWrapperRelPos = [
-        (touchPositions[0][0] - projectionLayerBBox.value.x) / projectionLayerBBox.value.width,
-        (touchPositions[0][1] - projectionLayerBBox.value.y) / projectionLayerBBox.value.height,
-      ] as [number, number];
-      const innerCanvasRel = touchStarts[0].canvasRel;
-
-      __applyTransform(0, 0, newScale, innerWrapperRelPos, innerCanvasRel, false);
-    }
-  };
-
-  const handleTouchEnd = (event: TouchEvent) => {
-    if (event.touches.length === 0) {
-      touchStarts = null;
-    } else {
-      touchStarts = touchStarts = freezeTouches(event.touches);
-    }
-  };
-  let dragStart: [number, number] | null = null;
-  let dragStartFrozenPan: { x: number; y: number } | null = null;
-  const handleMouseDown = (event: MouseEvent) => {
-    dragStart = [event.clientX, event.clientY];
-    dragStartFrozenPan = pz.value!.getPan();
-  };
-  const handleMouseUp = (event: MouseEvent) => {
-    dragStart = null;
-    dragStartFrozenPan = null;
-  };
-  const handleMouseMove = (event: MouseEvent) => {
-    if (dragStart && dragStartFrozenPan) {
-      const deltaX = event.clientX - dragStart[0];
-      const deltaY = event.clientY - dragStart[1];
-      const x = dragStartFrozenPan.x - -deltaX / pz.value!.getScale();
-      const y = dragStartFrozenPan.y - -deltaY / pz.value!.getScale();
-      pz.value!.pan(x, y, {});
-    }
-  };
-
-  const normalizeMatrixCoordinates = (clientX: number, clientY: number, innerFrame = false): [number, number] => {
+  const normalizeMatrixCoordinates = (
+    clientX: number,
+    clientY: number,
+    innerFrame = false
+  ): [number, number] => {
     if (!canvasWrapperRef.value) {
       return [0, 0];
     }
     const frameRelPos = [
-      innerFrame ? clientX : clientX - canvasWrapperRef.value.getBoundingClientRect().left,
-      innerFrame ? clientY : clientY - canvasWrapperRef.value.getBoundingClientRect().top,
+      innerFrame
+        ? clientX
+        : clientX - canvasWrapperRef.value.getBoundingClientRect().left,
+      innerFrame
+        ? clientY
+        : clientY - canvasWrapperRef.value.getBoundingClientRect().top,
     ];
     return [
-      Math.round((frameRelPos[0] - innerBoundsOfSVG.value.x) / layerOriginalScaleFactor.value / transform.value.scale),
-      Math.round((frameRelPos[1] - innerBoundsOfSVG.value.y) / layerOriginalScaleFactor.value / transform.value.scale),
+      Math.round(
+        (frameRelPos[0] - innerBoundsOfSVG.value.x) /
+          layerOriginalScaleFactor.value /
+          transform.value.scale
+      ),
+      Math.round(
+        (frameRelPos[1] - innerBoundsOfSVG.value.y) /
+          layerOriginalScaleFactor.value /
+          transform.value.scale
+      ),
     ];
   };
 
@@ -250,15 +113,13 @@ export default function usePanzoom(
   //   }
   // });
 
-  const setTransform = (newTransform: Transform, animate: boolean) => {
+  const setTransform = (newTransform: Transform) => {
     if (pz.value && !_.isEqual(newTransform, exposedTransform.value)) {
       const updatedTransform = pz.value.zoomToPoint(newTransform.scale, {
         clientX: window.innerWidth / 2,
         clientY: window.innerHeight / 2,
       });
-      pz.value.pan(newTransform.x, newTransform.y, {
-        animate,
-      });
+      pz.value.pan(newTransform.x, newTransform.y, {});
       updateTransform(updatedTransform);
     }
   };
@@ -268,11 +129,17 @@ export default function usePanzoom(
       if (canvasWrapperRef.value) {
         const initialTransform = (() => {
           try {
-            const transformValueRaw = window.getComputedStyle(canvasWrapperRef.value).getPropertyValue("transform");
-            const transformRawValueMatching = transformValueRaw.match(CSS_TRANSFORM_MATRIX_VALUES);
+            const transformValueRaw = window
+              .getComputedStyle(canvasWrapperRef.value)
+              .getPropertyValue("transform");
+            const transformRawValueMatching = transformValueRaw.match(
+              CSS_TRANSFORM_MATRIX_VALUES
+            );
             if (transformRawValueMatching) {
               const [, valuesListStr] = transformRawValueMatching;
-              const [, , , , translateX, translateY] = valuesListStr.split(/,\s*/).map(Number);
+              const [, , , , translateX, translateY] = valuesListStr
+                .split(/,\s*/)
+                .map(Number);
               return {
                 translateX: Number(translateX),
                 translateY: Number(translateY),
@@ -293,10 +160,16 @@ export default function usePanzoom(
           maxScale: 10,
         });
 
-        canvasWrapperRef.value.addEventListener("panzoomchange", handlePanzoomChange as any);
+        canvasWrapperRef.value.addEventListener(
+          "panzoomchange",
+          handlePanzoomChange as any
+        );
         onUnmounted(() => {
           if (canvasWrapperRef.value) {
-            canvasWrapperRef.value.removeEventListener("panzoomchange", handlePanzoomChange as any);
+            canvasWrapperRef.value.removeEventListener(
+              "panzoomchange",
+              handlePanzoomChange as any
+            );
           }
         });
       } else {
@@ -306,22 +179,11 @@ export default function usePanzoom(
   });
 
   return {
-    projectionLayerBBox,
-    ratio,
-    canvasSize,
-    __calcTransform,
-    __applyTransform,
     transform: exposedTransform,
     normalizeMatrixCoordinates,
     pz,
     nativeTransform: transform,
     setTransform,
     handleWheel,
-    handleMouseDown,
-    handleMouseUp,
-    handleMouseMove,
-    handleTouchStart,
-    handleTouchMove,
-    handleTouchEnd,
   };
 }
